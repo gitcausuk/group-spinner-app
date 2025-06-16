@@ -1,106 +1,153 @@
-<!-- Final Group Spinner Tool with Firebase databaseURL included -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Group Spinner</title>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
   <style>
+    :root {
+      --main-color: #002147;
+      --accent-color: #0077cc;
+      --hover-color: #005fa3;
+    }
+    button {
+      background-color: var(--accent-color);
+      border: none;
+      color: white;
+      border-radius: 8px;
+      transition: background-color 0.2s ease;
+    }
+    button:hover {
+      background-color: var(--hover-color);
+    }
+    #admin-view button {
+      background-color: #999;
+    }
+    #admin-view button:hover {
+      background-color: #555;
+    }
     body { font-family: sans-serif; text-align: center; padding: 2rem; }
     input, button { font-size: 1rem; padding: 0.5rem 1rem; margin: 0.5rem; }
-    #admin-view { display: none; margin-top: 2rem; }
-    table { margin: 0 auto; border-collapse: collapse; width: 90%; }
-    th, td { border: 1px solid #ccc; padding: 0.5rem; }
+    #admin-view { display: none; margin-top: 2rem; font-size: 0.75rem; }
+    table { margin: 0 auto; border-collapse: collapse; width: 90%; max-width: 400px; }
+    th, td { border: 1px solid #ccc; padding: 0.3rem; }
   </style>
 </head>
 <body>
+  <img src="sbs-logo.png" alt="Oxford SBS Logo" style="max-width: 180px; display: block; margin: 0 auto 1rem;">
   <h2>Group Spinner</h2>
-  <div>
+  <div style="margin-top: 5rem;">
     <input type="text" id="name" placeholder="Enter your name" />
     <button onclick="spin()">🎡 Spin</button>
-    <button onclick="showAdmin()">For Admin</button>
+    <button style="font-size: 0.85rem; padding: 0.4rem 0.8rem;" onclick="showAdmin()">For Admin</button>
   </div>
   <div id="result" style="margin-top: 1rem; font-weight: bold;"></div>
   <div id="admin-view">
-    <h3>Admin Panel</h3>
+    <button onclick="resetAll()" style="margin-bottom: 1rem;">🧹 Reset All Assignments</button>
+    <h3>For Admin</h3>
     <table>
       <thead><tr><th>Group</th><th>Members (Roles)</th></tr></thead>
       <tbody id="admin-body"></tbody>
     </table>
   </div>
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <script>
-const config = {
-  apiKey: "AIzaSyAcjM_P_w0hJFnKlKB7yPtuWMncLzEoo24",
-  authDomain: "group-spinner.firebaseapp.com",
-  databaseURL: "https://group-spinner-default-rtdb.firebaseio.com",
-  projectId: "group-spinner",
-  storageBucket: "group-spinner.firebasestorage.app",
-  messagingSenderId: "323238343002",
-  appId: "1:323238343002:web:2766fdafa93a85d0dac363"
-};
-firebase.initializeApp(config);
-const db = firebase.database();
+  const firebaseConfig = {
+    apiKey: "AIzaSyAcjM_P_w0hJFnKlKB7yPtuWMncLzEoo24",
+    authDomain: "group-spinner.firebaseapp.com",
+    databaseURL: "https://group-spinner-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "group-spinner",
+    storageBucket: "group-spinner.firebasestorage.app",
+    messagingSenderId: "323238343002",
+    appId: "1:323238343002:web:2afb074ee3e4c4dedac363",
+    measurementId: "G-3FP5SY3HJL"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+</script>
+<script>
 const max = 5;
+let assignments = {};
+let groupCounts = {};
+let groupRoles = {};
+
+firebase.database().ref("assignments").on("value", snapshot => {
+  assignments = snapshot.val() || {};
+  groupCounts = {};
+  groupRoles = {};
+  for (const [name, { group, role }] of Object.entries(assignments)) {
+    if (!groupCounts[group]) groupCounts[group] = 0;
+    groupCounts[group]++;
+    if (!groupRoles[group]) groupRoles[group] = new Set();
+    groupRoles[group].add(role);
+  }
+  updateAdmin();
+});
 
 function spin() {
   const name = document.getElementById("name").value.trim();
   if (!name) return alert("Enter your name first.");
-  db.ref("assignments/" + name).once("value", snap => {
-    if (snap.exists()) {
-      const { group, role } = snap.val();
-      document.getElementById("result").innerText = `✅ You are already in ${group} as Role ${role}`;
-    } else {
-      assign(name);
-    }
-  });
+  if (assignments[name]) {
+    const { group, role } = assignments[name];
+    document.getElementById("result").innerText = `✅ You are already in ${group} as Role ${role}`;
+  } else {
+    assign(name);
+  }
 }
 
 function assign(name) {
-  db.ref("assignments").once("value", snap => {
-    const data = snap.val() || {};
-    const counts = {}, roles = {};
-    Object.entries(data).forEach(([n, {group, role}]) => {
-      counts[group] = (counts[group] || 0) + 1;
-      roles[group] = roles[group] || new Set();
-      roles[group].add(role);
-    });
-    let target = null, size = Infinity;
-    for (let i = 1; i <= Object.keys(counts).length + 1; i++) {
-      const g = "Group " + i;
-      const s = counts[g] || 0;
-      if (s < max && s < size) {
-        target = g;
-        size = s;
-      }
+  let target = null, size = Infinity;
+  for (let i = 1; i <= 14; i++) {
+    const g = "Group " + i;
+    const s = groupCounts[g] || 0;
+    if (s < max && s < size) {
+      target = g;
+      size = s;
     }
-    let role = 1;
-    const used = roles[target] || new Set();
-    while (used.has(role)) role++;
-    db.ref("assignments/" + name).set({ group: target, role });
-    document.getElementById("result").innerText = `🎉 You are in ${target} as Role ${role}`;
-  });
+  }
+  let role = 1;
+  const used = groupRoles[target] || new Set();
+  while (used.has(role)) role++;
+  firebase.database().ref("assignments/" + name).set({ group: target, role });
+  document.getElementById("result").innerText = `🎉 You are in ${target} as Role ${role}`;
 }
 
 function showAdmin() {
   const pwd = prompt("Admin password?");
   if (pwd !== "oxford2025") return alert("Wrong password.");
   document.getElementById("admin-view").style.display = "block";
-  db.ref("assignments").on("value", snap => {
-    const data = snap.val() || {}, map = {};
-    Object.entries(data).forEach(([n, {group, role}]) => {
-      if (!map[group]) map[group] = [];
-      map[group].push(`${n} (Role ${role})`);
-    });
-    const body = document.getElementById("admin-body");
-    body.innerHTML = "";
-    Object.keys(map).sort().forEach(g => {
-      const row = `<tr><td>${g}</td><td>${map[g].join(", ")}</td></tr>`;
-      body.innerHTML += row;
-    });
+  updateAdmin();
+}
+
+function updateAdmin() {
+  const map = {};
+  for (const [name, { group, role }] of Object.entries(assignments)) {
+    if (!map[group]) map[group] = [];
+    map[group].push(`${name} (Role ${role})`);
+  }
+  const body = document.getElementById("admin-body");
+  body.innerHTML = "";
+  Object.keys(map).sort().forEach(g => {
+    const row = `<tr><td>${g}</td><td>${map[g].join(", ")}</td></tr>`;
+    body.innerHTML += row;
   });
+}
+
+function resetAll() {
+  if (!confirm("Are you sure you want to clear all group assignments?")) return;
+  firebase.database().ref("assignments").remove()
+    .then(() => {
+      alert("All assignments have been cleared.");
+      document.getElementById("result").innerText = "";
+    })
+    .catch((error) => {
+      console.error("Error clearing assignments:", error);
+      alert("Failed to reset assignments.");
+    });
 }
 </script>
 </body>
