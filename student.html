@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Student Spinner</title>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 2rem; }
+    input, button { font-size: 1rem; padding: 0.5rem 1rem; margin: 0.5rem; }
+    #result { margin-top: 1rem; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>Group Spinner</h2>
+  <input type="text" id="name" placeholder="Enter your name" />
+  <button onclick="spin()">🎡 Spin</button>
+  <div id="result"></div>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAcjM_P_w0hJFnKlKB7yPtuWMncLzEoo24",
+  authDomain: "group-spinner.firebaseapp.com",
+  databaseURL: "https://group-spinner-default-rtdb.firebaseio.com",
+  projectId: "group-spinner",
+  storageBucket: "group-spinner.firebasestorage.app",
+  messagingSenderId: "323238343002",
+  appId: "1:323238343002:web:2766fdafa93a85d0dac363"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const max = 5;
+
+function spin() {
+  const name = document.getElementById("name").value.trim();
+  if (!name) return alert("Enter your name first.");
+  db.ref("assignments/" + name).once("value", snap => {
+    if (snap.exists()) {
+      const { group, role } = snap.val();
+      document.getElementById("result").innerText = `✅ You are already in ${group} as Role ${role}`;
+    } else {
+      assign(name);
+    }
+  });
+}
+
+function assign(name) {
+  db.ref("assignments").once("value", snap => {
+    const data = snap.val() || {};
+    const counts = {}, roles = {};
+    Object.entries(data).forEach(([n, {group, role}]) => {
+      counts[group] = (counts[group] || 0) + 1;
+      roles[group] = roles[group] || new Set();
+      roles[group].add(role);
+    });
+    let target = null, size = Infinity;
+    for (let i = 1; i <= Object.keys(counts).length + 1; i++) {
+      const g = "Group " + i;
+      const s = counts[g] || 0;
+      if (s < max && s < size) {
+        target = g;
+        size = s;
+      }
+    }
+    let role = 1;
+    const used = roles[target] || new Set();
+    while (used.has(role)) role++;
+    db.ref("assignments/" + name).set({ group: target, role });
+    document.getElementById("result").innerText = `🎉 You are in ${target} as Role ${role}`;
+  });
+}
+</script>
+</body>
+</html>

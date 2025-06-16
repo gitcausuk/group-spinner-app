@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Panel</title>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 2rem; }
+    table { margin: 0 auto; border-collapse: collapse; width: 90%; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem; }
+    #admin-view { margin-top: 2rem; }
+  </style>
+</head>
+<body>
+  <h2>Admin Panel</h2>
+  <button onclick="confirmReset()">🧹 Reset All Assignments</button>
+  <div id="admin-view">
+    <table>
+      <thead><tr><th>Group</th><th>Students (Roles)</th></tr></thead>
+      <tbody id="admin-body"></tbody>
+    </table>
+  </div>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAcjM_P_w0hJFnKlKB7yPtuWMncLzEoo24",
+  authDomain: "group-spinner.firebaseapp.com",
+  databaseURL: "https://group-spinner-default-rtdb.firebaseio.com",
+  projectId: "group-spinner",
+  storageBucket: "group-spinner.firebasestorage.app",
+  messagingSenderId: "323238343002",
+  appId: "1:323238343002:web:2766fdafa93a85d0dac363"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+load();
+
+function load() {
+  db.ref("assignments").on("value", snap => {
+    const data = snap.val() || {}, map = {};
+    Object.entries(data).forEach(([n, {group, role}]) => {
+      if (!map[group]) map[group] = [];
+      map[group].push(`${n} (Role ${role})`);
+    });
+    const body = document.getElementById("admin-body");
+    body.innerHTML = "";
+    Object.keys(map).sort().forEach(g => {
+      const row = `<tr><td>${g}</td><td>${map[g].join(", ")}</td></tr>`;
+      body.innerHTML += row;
+    });
+  });
+}
+
+function confirmReset() {
+  const yes = confirm("Are you sure you want to delete all assignments?");
+  if (yes) {
+    db.ref("assignments").remove();
+    alert("All assignments cleared.");
+  }
+}
+</script>
+</body>
+</html>
